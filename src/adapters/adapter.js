@@ -59,6 +59,14 @@ class Adapter {
             item.id = NODE_PREFIX + path
             item.text = name
             item.icon = type // uses `type` as class name for tree node
+            
+            
+            if (item.patch) { 
+              item.text += `<span class="patch">
+                  <span class="text-green">+${item.patch.additions}</span>
+                  <span class="text-red">+${item.patch.deletions}</span>
+              </span>`
+            }
 
             if (node) {
               folders[''].push(item)
@@ -276,6 +284,14 @@ class Adapter {
    * @api protected
    */
   _getTree(path, opts, cb) {
+    throw new Error('Not implemented')
+  }
+
+  /**
+   * Gets the path if any
+   * @api protected
+   */
+  _getPatch(cb) {
     throw new Error('Not implemented')
   }
 

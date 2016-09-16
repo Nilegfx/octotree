@@ -186,10 +186,22 @@ class GitHub extends Adapter {
         cb(null, repo)
       })
     }
+
+ 
   }
 
   // @override
   selectFile(path) {
+    const rel_path = path.split("/").slice(5).join("/")
+    console.log(rel_path)
+
+    const patch = $(".user-select-contain[title='"+rel_path+"']")
+    if (patch.length == 1) {
+      $(window).scrollTop(patch.offset().top - 85);
+
+      return
+    }
+
     const $pjaxContainer = $(GH_PJAX_CONTAINER_SEL)
 
     if ($pjaxContainer.length) {
@@ -215,9 +227,78 @@ class GitHub extends Adapter {
   // @override
   _getTree(path, opts, cb) {
     this._get(`/git/trees/${path}`, opts, (err, res) => {
-      if (err) cb(err)
-      else cb(null, res.tree)
+      if (err) {
+        cb(err)
+        return
+      }
+
+      const diff = this._getPatch(path)
+      res.tree.forEach(function(node) {
+        node.patch = diff[node.path]
+        delete diff[node.path]
+      })
+
+      console.log("diff", diff)
+
+      for (let path in diff) {
+        console.log(path, path.split("/").slice(-1).join("/"))
+        res.tree.push({
+          id: "octo" + path,
+          path: path,
+          mode: "100644",
+          type: diff[path].type,
+          sha: "acc6bddb4968eef665af6c7dc3d7582513430258",
+          size: 1116,
+          url: "https://api.github.com/repos/src-d/go-git/git/blobs/acc6bddb4968eef665af6c7dc3d7582513430258",
+        })
+      }
+      
+      console.log(res.tree)
+      console.log("done")
+      cb(null, res.tree)
     })
+  }
+
+  // @override
+  _getPatch(path) {
+    const diff = {}
+    const files = $(".diff-view .file-info")
+    files.each(function() {
+        const file = $(this).find("span[title]").first()
+        const path = file.attr("title")
+        if (!path.startsWith(path)) {
+          return
+        }
+
+        const stats = $(this).find(".diffstat").first()
+        const stats_text = stats.attr("aria-label").split(" ")
+
+        const additions = Number(stats_text[0])
+        const deletions = Number(stats_text[3])
+
+        const base = []
+        const path_parts = path.split("/")
+        let count = 0 
+        path_parts.forEach(function(rel_path) {
+          count++
+
+          base.push(rel_path)
+          const fullpath = base.join("/")
+          if (!diff[fullpath]) {
+            diff[fullpath] = {path: fullpath, additions:0, deletions:0}
+          }
+
+          diff[fullpath].additions += additions
+          diff[fullpath].deletions += deletions
+
+          diff[fullpath].type = "tree"
+          if (path_parts.length == count) {
+              diff[fullpath].type =  "blob"
+          }
+        })
+    })
+
+    return diff
   }
 
   // @override

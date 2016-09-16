@@ -34,6 +34,8 @@ class TreeView {
           if (loadAll) {
             treeData = this._collapse(treeData)
           }
+
+          console.log(treeData)
           cb(treeData)
         }
       })
