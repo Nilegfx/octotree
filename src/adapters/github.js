@@ -193,8 +193,6 @@ class GitHub extends Adapter {
   // @override
   selectFile(path) {
     const rel_path = path.split("/").slice(5).join("/")
-    console.log(rel_path)
-
     const patch = $(".user-select-contain[title='"+rel_path+"']")
     if (patch.length == 1) {
       $(window).scrollTop(patch.offset().top - 85);
@@ -238,23 +236,19 @@ class GitHub extends Adapter {
         delete diff[node.path]
       })
 
-      console.log("diff", diff)
-
       for (let path in diff) {
-        console.log(path, path.split("/").slice(-1).join("/"))
         res.tree.push({
           id: "octo" + path,
           path: path,
-          mode: "100644",
           type: diff[path].type,
-          sha: "acc6bddb4968eef665af6c7dc3d7582513430258",
-          size: 1116,
-          url: "https://api.github.com/repos/src-d/go-git/git/blobs/acc6bddb4968eef665af6c7dc3d7582513430258",
         })
       }
-      
-      console.log(res.tree)
-      console.log("done")
+
+      res.tree.sort((a, b) => {
+        if (a.type === b.type) return a.path === b.path ? 0 : a.path < b.path ? -1 : 1
+        return a.type === 'blob' ? 1 : -1
+      }) 
+
       cb(null, res.tree)
     })
   }
@@ -264,38 +258,56 @@ class GitHub extends Adapter {
     const diff = {}
     const files = $(".diff-view .file-info")
     files.each(function() {
-        const file = $(this).find("span[title]").first()
-        const path = file.attr("title")
-        if (!path.startsWith(path)) {
-          return
+      const file = $(this).find("span[title]").first()
+      
+      let path = file.attr("title")
+      let previous = ""
+
+      const rename_index = path.indexOf("→")
+      if (rename_index != -1) {
+        previous = path.substring(0, rename_index-1)
+        path = path.substring(rename_index+2)
+      }
+
+
+      if (!path.startsWith(path)) return
+
+      const stats = $(this).find(".diffstat").first()
+      const stats_text = stats.attr("aria-label")
+      const patch = {type: "blob", path: path, additions: 0, deletions: 0}
+
+      if (stats_text.indexOf("additions") != -1) {
+        const stats_parts = stats_text.split(" ")
+        patch.additions = Number(stats_parts[0])
+        patch.deletions = Number(stats_parts[3])
+        patch.action = "modify"
+      } else {
+        if (stats_text.indexOf("renamed") != -1) {
+          patch.action = "rename"
+          patch.previous = previous
+        } else if (stats_text.indexOf("added") != -1) {
+          patch.action = "add"
+        }
+      }
+
+      diff[path] = patch 
+    
+      const base = []
+      path.split("/").slice(0, -1).forEach(function(rel_path) {
+        base.push(rel_path)
+        const fullpath = base.join("/")
+
+        if (!diff[fullpath]) {
+          diff[fullpath] = {
+            path:fullpath, type:"tree", 
+            additions:0, deletions:0, files: 0,
+          }
         }
 
-        const stats = $(this).find(".diffstat").first()
-        const stats_text = stats.attr("aria-label").split(" ")
-
-        const additions = Number(stats_text[0])
-        const deletions = Number(stats_text[3])
-
-        const base = []
-        const path_parts = path.split("/")
-        let count = 0 
-        path_parts.forEach(function(rel_path) {
-          count++
-
-          base.push(rel_path)
-          const fullpath = base.join("/")
-          if (!diff[fullpath]) {
-            diff[fullpath] = {path: fullpath, additions:0, deletions:0}
-          }
-
-          diff[fullpath].additions += additions
-          diff[fullpath].deletions += deletions
-
-          diff[fullpath].type = "tree"
-          if (path_parts.length == count) {
-              diff[fullpath].type =  "blob"
-          }
-        })
+        diff[fullpath].files++
+        diff[fullpath].additions += patch.additions
+        diff[fullpath].deletions += patch.deletions
+      })
     })
 
     return diff

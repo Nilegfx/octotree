@@ -35,7 +35,6 @@ class TreeView {
             treeData = this._collapse(treeData)
           }
 
-          console.log(treeData)
           cb(treeData)
         }
       })
