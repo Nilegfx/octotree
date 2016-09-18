@@ -120,7 +120,6 @@ class GitHub extends Adapter {
 
   // @override
   getRepoFromPath(showInNonCodePage, currentRepo, token, cb) {
-
     // 404 page, skip
     if ($(GH_404_SEL).length) {
       return cb()
@@ -137,8 +136,10 @@ class GitHub extends Adapter {
       return cb()
     }
 
-    const username = match[1]
-    const reponame = match[2]
+    let username = match[1]
+    let reponame = match[2]
+    let branch = ""
+    let is_patch = false
 
     // Not a repository, skip
     if (~GH_RESERVED_USER_NAMES.indexOf(username) ||
@@ -151,35 +152,47 @@ class GitHub extends Adapter {
       return cb()
     }
 
-    // Get branch by inspecting page, quite fragile so provide multiple fallbacks
-    const GH_BRANCH_SEL_1 = '[aria-label="Switch branches or tags"]'
-    const GH_BRANCH_SEL_2 = '.repo-root a[data-branch]'
-    const GH_BRANCH_SEL_3 = '.repository-sidebar a[aria-label="Code"]'
-    const GH_BRANCH_SEL_4 = '.current-branch'
-    const GH_BRANCH_SEL_5 = 'link[title*="Recent Commits to"]'
+    const from = $(".head-ref").attr('title')
+    if (from) { 
+      const slash = from.indexOf("/")
+      const dots = from.indexOf(":")
 
-    const branch =
-      // Detect branch in code page
-      $(GH_BRANCH_SEL_1).attr('title') || $(GH_BRANCH_SEL_2).data('branch') ||
-      // Non-code page (old GH design)
-      ($(GH_BRANCH_SEL_3).attr('href') || ' ').match(/([^\/]+)/g)[3] ||
-      // Non-code page: commit page
-      ($(GH_BRANCH_SEL_4).attr('title') || ' ').match(/([^\:]+)/g)[1] ||
-      // Non-code page: others
-      ($(GH_BRANCH_SEL_5).length === 1 && ($(GH_BRANCH_SEL_5).attr('title') || ' ').match(/([^\:]+)/g)[1]) ||
+      username = from.slice(0, slash)
+      reponame = from.slice(slash+1, dots)
+      branch = from.slice(dots+1)
 
-      // Reuse last selected branch if exist
-      (currentRepo.username === username && currentRepo.reponame === reponame && currentRepo.branch)
-      // Get default branch from cache
-      this._defaultBranch[username + '/' + reponame]
+      is_patch = $(".diff-view .file-info").length != 0
 
+    } else {
+      // Get branch by inspecting page, quite fragile so provide multiple fallbacks
+      const GH_BRANCH_SEL_1 = '[aria-label="Switch branches or tags"]'
+      const GH_BRANCH_SEL_2 = '.repo-root a[data-branch]'
+      const GH_BRANCH_SEL_3 = '.repository-sidebar a[aria-label="Code"]'
+      const GH_BRANCH_SEL_4 = '.current-branch'
+      const GH_BRANCH_SEL_5 = 'link[title*="Recent Commits to"]'
+
+      branch =
+        // Detect branch in code page
+        $(GH_BRANCH_SEL_1).attr('title') || $(GH_BRANCH_SEL_2).data('branch') ||
+        // Non-code page (old GH design)
+        ($(GH_BRANCH_SEL_3).attr('href') || ' ').match(/([^\/]+)/g)[3] ||
+        // Non-code page: commit page
+        ($(GH_BRANCH_SEL_4).attr('title') || ' ').match(/([^\:]+)/g)[1] ||
+        // Non-code page: others
+        ($(GH_BRANCH_SEL_5).length === 1 && ($(GH_BRANCH_SEL_5).attr('title') || ' ').match(/([^\:]+)/g)[1]) ||
+
+        // Reuse last selected branch if exist
+        (currentRepo.username === username && currentRepo.reponame === reponame && currentRepo.branch)
+        // Get default branch from cache
+        this._defaultBranch[username + '/' + reponame]
+    }
+    
     // Still no luck, get default branch for real
-    const repo = {username: username, reponame: reponame, branch: branch}
+    const repo = {username: username, reponame: reponame, branch: branch, is_patch:is_patch}
 
     if (repo.branch) {
       cb(null, repo)
-    }
-    else {
+    } else {
       this._get(null, {repo, token}, (err, data) => {
         if (err) return cb(err)
         repo.branch = this._defaultBranch[username + '/' + reponame] = data.default_branch || 'master'
@@ -269,14 +282,13 @@ class GitHub extends Adapter {
         path = path.substring(rename_index+2)
       }
 
-
       if (!path.startsWith(path)) return
 
       const stats = $(this).find(".diffstat").first()
       const stats_text = stats.attr("aria-label")
       const patch = {type: "blob", path: path, additions: 0, deletions: 0}
 
-      if (stats_text.indexOf("additions") != -1) {
+      if (stats_text.indexOf("addition") != -1) {
         const stats_parts = stats_text.split(" ")
         patch.additions = Number(stats_parts[0])
         patch.deletions = Number(stats_parts[3])

@@ -24,7 +24,6 @@ class TreeView {
       const loadAll = this.adapter.canLoadEntireTree() &&
                       this.store.get(STORE.LOADALL)
       node = !loadAll && (node.id === '#' ? {path: ''} : node.original)
-
       this.adapter.loadCodeTree({repo, token, node}, (err, treeData) => {
         if (err) {
           $(this).trigger(EVENT.FETCH_ERROR, [err])
