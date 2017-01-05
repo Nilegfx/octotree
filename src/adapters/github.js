@@ -38,8 +38,7 @@ class GitHub extends Adapter {
     // Note that couldn't do this in response to URL change, since new DOM via pjax might not be ready.
     const diffModeObserver = new window.MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (~mutation.oldValue.indexOf('split-diff') ||
-            ~mutation.target.className.indexOf('split-diff')) {
+        if (~mutation.oldValue.indexOf('split-diff') || ~mutation.target.className.indexOf('split-diff')) {
           return $(document).trigger(EVENT.LAYOUT_CHANGE)
         }
       })
@@ -142,8 +141,7 @@ class GitHub extends Adapter {
     let is_patch = false
 
     // Not a repository, skip
-    if (~GH_RESERVED_USER_NAMES.indexOf(username) ||
-        ~GH_RESERVED_REPO_NAMES.indexOf(reponame)) {
+    if (~GH_RESERVED_USER_NAMES.indexOf(username) || ~GH_RESERVED_REPO_NAMES.indexOf(reponame)) {
       return cb()
     }
 
@@ -153,13 +151,13 @@ class GitHub extends Adapter {
     }
 
     const from = $(".head-ref").attr('title')
-    if (from) { 
+    if (from) {
       const slash = from.indexOf("/")
       const dots = from.indexOf(":")
 
       username = from.slice(0, slash)
-      reponame = from.slice(slash+1, dots)
-      branch = from.slice(dots+1)
+      reponame = from.slice(slash + 1, dots)
+      branch = from.slice(dots + 1)
 
       is_patch = $(".diff-view .file-info").length != 0
 
@@ -183,12 +181,12 @@ class GitHub extends Adapter {
 
         // Reuse last selected branch if exist
         (currentRepo.username === username && currentRepo.reponame === reponame && currentRepo.branch)
-        // Get default branch from cache
-        this._defaultBranch[username + '/' + reponame]
+      // Get default branch from cache
+      this._defaultBranch[username + '/' + reponame]
     }
-    
+
     // Still no luck, get default branch for real
-    const repo = {username: username, reponame: reponame, branch: branch, is_patch:is_patch}
+    const repo = {username: username, reponame: reponame, branch: branch, is_patch: is_patch}
 
     if (repo.branch) {
       cb(null, repo)
@@ -200,13 +198,13 @@ class GitHub extends Adapter {
       })
     }
 
- 
+
   }
 
   // @override
   selectFile(path) {
     const rel_path = path.split("/").slice(5).join("/")
-    const patch = $(".user-select-contain[title='"+rel_path+"']")
+    const patch = $(".user-select-contain[title='" + rel_path + "']")
     if (patch.length == 1) {
       $(window).scrollTop(patch.offset().top - 85);
 
@@ -231,7 +229,7 @@ class GitHub extends Adapter {
   loadCodeTree(opts, cb) {
     opts.encodedBranch = encodeURIComponent(decodeURIComponent(opts.repo.branch))
     opts.path = (opts.node && (opts.node.sha || opts.encodedBranch)) ||
-                (opts.encodedBranch + '?recursive=1')
+      (opts.encodedBranch + '?recursive=1')
     this._loadCodeTree(opts, null, cb)
   }
 
@@ -244,7 +242,8 @@ class GitHub extends Adapter {
       }
 
       const diff = this._getPatch(path)
-      res.tree.forEach(function(node) {
+      res.tree.forEach(function (node) {
+
         node.patch = diff[node.path]
         delete diff[node.path]
       })
@@ -260,9 +259,13 @@ class GitHub extends Adapter {
       res.tree.sort((a, b) => {
         if (a.type === b.type) return a.path === b.path ? 0 : a.path < b.path ? -1 : 1
         return a.type === 'blob' ? 1 : -1
-      }) 
+      })
 
-      cb(null, res.tree)
+      if (opts.repo.is_patch) {
+        cb(null, res.tree.filter(n => n.patch));
+      } else {
+        cb(null, res.tree);
+      }
     })
   }
 
@@ -270,16 +273,16 @@ class GitHub extends Adapter {
   _getPatch(path) {
     const diff = {}
     const files = $(".diff-view .file-info")
-    files.each(function() {
-      const file = $(this).find("span[title]").first()
-      
+    files.each(function () {
+      const file = $(this).find("a.link-gray-dark").first()
+
       let path = file.attr("title")
       let previous = ""
 
       const rename_index = path.indexOf("→")
       if (rename_index != -1) {
-        previous = path.substring(0, rename_index-1)
-        path = path.substring(rename_index+2)
+        previous = path.substring(0, rename_index - 1)
+        path = path.substring(rename_index + 2)
       }
 
       if (!path.startsWith(path)) return
@@ -302,17 +305,17 @@ class GitHub extends Adapter {
         }
       }
 
-      diff[path] = patch 
-    
+      diff[path] = patch
+
       const base = []
-      path.split("/").slice(0, -1).forEach(function(rel_path) {
+      path.split("/").slice(0, -1).forEach(function (rel_path) {
         base.push(rel_path)
         const fullpath = base.join("/")
 
         if (!diff[fullpath]) {
           diff[fullpath] = {
-            path:fullpath, type:"tree", 
-            additions:0, deletions:0, files: 0,
+            path: fullpath, type: "tree",
+            additions: 0, deletions: 0, files: 0,
           }
         }
 
@@ -332,7 +335,7 @@ class GitHub extends Adapter {
 
     this._get(`/git/blobs/${item.sha}`, opts, (err, res) => {
       if (err) return cb(err)
-      const data = atob(res.content.replace(/\n/g,''))
+      const data = atob(res.content.replace(/\n/g, ''))
       cb(null, parseGitmodules(data))
     })
   }
@@ -341,10 +344,10 @@ class GitHub extends Adapter {
     const host = location.protocol + '//' +
       (location.host === 'github.com' ? 'api.github.com' : (location.host + '/api/v3'))
     const url = `${host}/repos/${opts.repo.username}/${opts.repo.reponame}${path || ''}`
-    const cfg  = { url, method: 'GET', cache: false }
+    const cfg = {url, method: 'GET', cache: false}
 
     if (opts.token) {
-      cfg.headers = { Authorization: 'token ' + opts.token }
+      cfg.headers = {Authorization: 'token ' + opts.token}
     }
 
     $.ajax(cfg)
